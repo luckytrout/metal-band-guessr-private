@@ -22,3 +22,12 @@ Alternatively run the quick test to verify `data_loader`:
 ```powershell
 python test_load.py
 ```
+
+## Data source and credits
+
+This project uses a dataset derived from the Kaggle collection "Every Metal Archives Band" (November 2024) by Henrique Guimarães. The canonical source is:
+
+- "Every Metal Archives Band November 2024" — Henrique Guimarães
+- Kaggle dataset: https://www.kaggle.com/datasets/guimacrlh/every-metal-archives-band-october-2024/data
+
+The file included in this repository is `datasets/metal_bands.csv`. Please consult the original Kaggle dataset page for license details, citation preferences, and any restrictions on redistribution.
