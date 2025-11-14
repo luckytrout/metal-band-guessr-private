@@ -2,6 +2,7 @@ import streamlit as st
 from streamlit.components.v1 import html
 import folium
 from data_loader import load_metal_bands
+from geo import resolve_origin
 
 st.set_page_config(page_title="Map — Folium demo", layout="wide")
 st.title("Map — Folium demo")
@@ -25,7 +26,7 @@ with st.expander("Dataset info"):
         st.warning(f"Could not load dataset preview: {e}")
 
 
-def make_map():
+def make_map(show_debug_marker: bool = False):
     # Basic world map centered roughly at lat 20, lon 0
     m = folium.Map(location=[20, 0], zoom_start=2, tiles="OpenStreetMap")
 
@@ -42,21 +43,65 @@ def make_map():
     ).add_to(m)
     folium.LayerControl().add_to(m)
 
-    # Show clicked lat/lon via popup
+    # Show clicked lat/lon via popup (handy for prototyping)
     folium.LatLngPopup().add_to(m)
 
-    # Helpful note marker in the map
-    folium.map.Marker(
-        [20, 0],
-        icon=folium.DivIcon(
-            html=f"<div style='font-size:12px'>Click map to get coords</div>"
-        ),
-    ).add_to(m)
+    # Aggregate bands by resolved country key and coords
+    country_map = {}  # country_key -> {coords: (lat,lon), bands: [names]}
+    try:
+        df = load_metal_bands()
+        for _, row in df.iterrows():
+            origin = row.get("origin")
+            if not origin or not isinstance(origin, str):
+                continue
+            country_key, coords = resolve_origin(origin)
+            if country_key and coords:
+                entry = country_map.setdefault(country_key, {"coords": coords, "bands": []})
+                entry["bands"].append(row.get("band_name") or "<unknown>")
+    except Exception:
+        country_map = {}
 
-    return m
+    # Add one marker per country with a popup listing bands
+    added = 0
+    for country_key, info in country_map.items():
+        lat, lon = info["coords"]
+        bands = info["bands"]
+        count = len(bands)
+        # Build HTML popup: title + count + up to 20 band names
+        shown = bands[:20]
+        more = count - len(shown)
+        list_html = """
+        <div style='max-height: 300px; overflow:auto;'>
+          <h4 style='margin:0;'>%s</h4>
+          <div>bands: %d</div>
+          <ul style='margin-top:0;'>%s</ul>
+          %s
+        </div>
+        """ % (
+            country_key.title(),
+            count,
+            "".join(f"<li>{b}</li>" for b in shown),
+            f"<div>and {more} more...</div>" if more > 0 else "",
+        )
+
+        popup = folium.Popup(list_html, max_width=400)
+        # Use a circle marker for better visibility at country centroid
+        folium.CircleMarker(location=[lat, lon], radius=7, color="blue", fill=True, fill_opacity=0.7, popup=popup).add_to(m)
+        added += 1
+
+    # Optional debug marker: a large red marker at the center to ensure markers render
+    if show_debug_marker:
+        folium.Marker(location=[20, 0], popup=folium.Popup("Debug marker", max_width=200),
+                      icon=folium.Icon(color='red', icon='info-sign')).add_to(m)
+
+    return m, added
 
 
-m = make_map()
+show_debug = st.checkbox("Show debug center marker (red)")
+m, added = make_map(show_debug_marker=show_debug)
+
+# Display how many markers were added (helps diagnose clustering/hiding)
+st.info(f"Markers added (resolvable origins): {added}")
 
 # Embed folium map HTML in Streamlit. Works in Streamlit and Jupyter notebooks.
 m_html = m._repr_html_()
