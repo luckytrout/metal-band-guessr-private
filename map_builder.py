@@ -6,6 +6,7 @@ from data_loader import load_metal_bands
 from geo import resolve_origin
 import folium
 from folium.plugins import MarkerCluster
+import pandas as pd
 
 
 def build_map():
@@ -18,17 +19,31 @@ def build_map():
     ).add_to(m)
     folium.TileLayer("CartoDB positron", attr=("&copy; OpenStreetMap contributors &copy; CARTO")).add_to(m)
 
+    # Helper to handle multiple possible column names (old vs new CSV headers)
+    def _first_nonempty(row, *cols):
+        for c in cols:
+            v = row.get(c)
+            if isinstance(v, float) and pd.isna(v):
+                continue
+            if v is None:
+                continue
+            if isinstance(v, str) and v.strip() == "":
+                continue
+            return v
+        return None
+
     # Aggregate bands by country
     country_map = {}
     df = load_metal_bands()
     for _, row in df.iterrows():
-        origin = row.get("origin")
+        origin = _first_nonempty(row, "origin", "Origin", "Country", "country")
         if not origin or not isinstance(origin, str):
             continue
         country_key, coords = resolve_origin(origin)
         if country_key and coords:
             entry = country_map.setdefault(country_key, {"coords": coords, "bands": []})
-            entry["bands"].append(row.get("band_name") or "<unknown>")
+            band = _first_nonempty(row, "band_name", "band", "Band Name", "Name", "name")
+            entry["bands"].append(band or "<unknown>")
 
     added = 0
     for country_key, info in country_map.items():

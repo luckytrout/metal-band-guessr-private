@@ -3,6 +3,7 @@ from streamlit.components.v1 import html
 import folium
 from data_loader import load_metal_bands
 from geo import resolve_origin
+import pandas as pd
 
 st.set_page_config(page_title="Map — Folium demo", layout="wide")
 st.title("Map — Folium demo")
@@ -46,18 +47,35 @@ def make_map(show_debug_marker: bool = False):
     # Show clicked lat/lon via popup (handy for prototyping)
     folium.LatLngPopup().add_to(m)
 
+    # Small helper: pick first non-empty value from several possible column names
+    def _first_nonempty(row, *cols):
+        for c in cols:
+            v = row.get(c)
+            # guard against pandas NaN
+            if isinstance(v, float) and pd.isna(v):
+                continue
+            if v is None:
+                continue
+            if isinstance(v, str) and v.strip() == "":
+                continue
+            return v
+        return None
+
     # Aggregate bands by resolved country key and coords
     country_map = {}  # country_key -> {coords: (lat,lon), bands: [names]}
     try:
         df = load_metal_bands()
         for _, row in df.iterrows():
-            origin = row.get("origin")
+            # support both the old dataset (origin/band_name) and new (Country/Name)
+            origin = _first_nonempty(row, "origin", "Origin", "Country", "country")
             if not origin or not isinstance(origin, str):
                 continue
             country_key, coords = resolve_origin(origin)
             if country_key and coords:
                 entry = country_map.setdefault(country_key, {"coords": coords, "bands": []})
-                entry["bands"].append(row.get("band_name") or "<unknown>")
+                # band name might be under several column headers
+                band = _first_nonempty(row, "band_name", "band", "Band Name", "Name", "name")
+                entry["bands"].append(band or "<unknown>")
     except Exception:
         country_map = {}
 
