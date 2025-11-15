@@ -3,9 +3,15 @@ from streamlit.components.v1 import html
 import folium
 import pandas as pd
 import random
+import math
 
 from data_loader import load_metal_bands
 from geo import resolve_origin
+
+try:
+    from streamlit_folium import st_folium
+except Exception:
+    st_folium = None
 
 
 st.set_page_config(page_title="Guesser — Demo", layout="wide")
@@ -85,6 +91,8 @@ with col1:
 
             if picked:
                 st.session_state.selected = picked
+                # clear previous guesses
+                st.session_state['last_guess'] = None
             else:
                 st.warning("Could not find a resolvable band origin in the dataset.")
         except Exception as e:
@@ -93,8 +101,7 @@ with col1:
     if st.session_state.selected:
         sel = st.session_state.selected
         st.markdown(f"**Band:** {sel['band']}")
-        st.write("**Origin (raw):**", sel['origin'])
-        st.write("**Resolved key:**", sel['country_key'])
+        # origin/resolved key hidden during guessing rounds
         if sel.get('genre'):
             st.write("**Genre:**", sel.get('genre'))
         if sel.get('status'):
@@ -126,14 +133,50 @@ with col2:
         zoom = 4
 
     m = make_map(center=center, zoom=zoom, debug_marker=debug)
-    if st.session_state.get('selected'):
-        lat, lon = st.session_state['selected']['coords']
-        popup_html = f"<b>{st.session_state['selected']['band']}</b><br/>{st.session_state['selected']['origin']}"
-        folium.Marker(location=[lat, lon], popup=folium.Popup(popup_html, max_width=300),
-                      icon=folium.Icon(color='blue', icon='music')).add_to(m)
 
-    m_html = m._repr_html_()
-    html(m_html, height=650)
+    # If streamlit_folium is not available, fall back to static embed and warn
+    if st_folium is None:
+        st.warning("Install 'streamlit-folium' to enable click-to-guess behavior (pip install streamlit-folium). Showing non-interactive map.")
+        # optionally show the true marker only in debug mode
+        if st.session_state.get('selected') and debug:
+            lat, lon = st.session_state['selected']['coords']
+            popup_html = f"<b>{st.session_state['selected']['band']}</b>"
+            folium.Marker(location=[lat, lon], popup=folium.Popup(popup_html, max_width=300),
+                          icon=folium.Icon(color='blue', icon='music')).add_to(m)
+        m_html = m._repr_html_()
+        html(m_html, height=650)
+    else:
+        # render interactive map and capture clicks
+        result = st_folium(m, height=650, returned_objects=["last_clicked"]) or {}
+        last = result.get("last_clicked")
+
+        # If user clicked and a band is selected, compute distance and show feedback
+        if last and st.session_state.get('selected'):
+            guess = (last.get('lat'), last.get('lng'))
+            st.session_state['last_guess'] = guess
+
+            def haversine(a, b):
+                # a, b: (lat, lon) in degrees
+                lat1, lon1 = map(math.radians, a)
+                lat2, lon2 = map(math.radians, b)
+                dlat = lat2 - lat1
+                dlon = lon2 - lon1
+                R = 6371.0
+                h = math.sin(dlat / 2) ** 2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlon / 2) ** 2
+                return 2 * R * math.asin(math.sqrt(h))
+
+            target = st.session_state['selected']['coords']
+            dist_km = haversine(guess, target)
+            st.success(f"You guessed at {guess[0]:.4f}, {guess[1]:.4f}. Distance to target: {dist_km:.1f} km")
+
+            # rebuild map to show guess and actual (feedback)
+            m2 = make_map(center=target, zoom=4, debug_marker=False)
+            folium.Marker(location=list(target), popup=folium.Popup("Actual location", max_width=200),
+                          icon=folium.Icon(color='blue', icon='music')).add_to(m2)
+            folium.Marker(location=list(guess), popup=folium.Popup("Your guess", max_width=200),
+                          icon=folium.Icon(color='red', icon='info-sign')).add_to(m2)
+            folium.PolyLine(locations=[list(guess), list(target)], color='purple', weight=2.5, opacity=0.8).add_to(m2)
+            st_folium(m2, height=650, returned_objects=["last_clicked"])
 
 
 st.markdown("""
