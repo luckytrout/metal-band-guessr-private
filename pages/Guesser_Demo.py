@@ -46,15 +46,6 @@ def make_map(center=(20, 0), zoom=2, debug_marker=False):
     return m
 
 
-with st.expander("Dataset preview"):
-    try:
-        df = load_metal_bands()
-        st.write(f"Rows: {df.shape[0]}, Columns: {df.shape[1]}")
-        st.dataframe(df.head(5))
-    except Exception as e:
-        st.warning(f"Could not load dataset preview: {e}")
-
-
 col1, col2 = st.columns([1, 2])
 
 with col1:
@@ -75,7 +66,21 @@ with col1:
                 key, coords = resolve_origin(origin)
                 if key and coords:
                     band = _first_nonempty(row, "band_name", "band", "Band Name", "Name", "name") or "<unknown>"
-                    picked = {"band": band, "origin": origin, "country_key": key, "coords": coords}
+                    # extra metadata: genre, url, photo, status
+                    genre = _first_nonempty(row, "Genre", "genre")
+                    url = _first_nonempty(row, "URL", "url", "Link", "link")
+                    photo = _first_nonempty(row, "Photo_URL", "photo_url", "Photo URL", "photo")
+                    status = _first_nonempty(row, "Status", "status")
+                    picked = {
+                        "band": band,
+                        "origin": origin,
+                        "country_key": key,
+                        "coords": coords,
+                        "genre": genre,
+                        "url": url,
+                        "photo": photo,
+                        "status": status,
+                    }
                     break
 
             if picked:
@@ -87,7 +92,28 @@ with col1:
 
     if st.session_state.selected:
         sel = st.session_state.selected
-        st.markdown(f"**Band:** {sel['band']}  \n**Origin (raw):** {sel['origin']}  \n**Resolved key:** {sel['country_key']}")
+        st.markdown(f"**Band:** {sel['band']}")
+        st.write("**Origin (raw):**", sel['origin'])
+        st.write("**Resolved key:**", sel['country_key'])
+        if sel.get('genre'):
+            st.write("**Genre:**", sel.get('genre'))
+        if sel.get('status'):
+            st.write("**Status:**", sel.get('status'))
+
+        # show link if available
+        if sel.get('url'):
+            try:
+                st.markdown(f"[Band page]({sel.get('url')})")
+            except Exception:
+                st.write("URL:", sel.get('url'))
+
+        # show photo if available
+        if sel.get('photo'):
+            try:
+                st.image(sel.get('photo'), width=220)
+            except Exception:
+                # image fetch/display may fail; fallback to printing URL
+                st.write("Photo URL:", sel.get('photo'))
 
     debug = st.checkbox("Show debug center marker")
 

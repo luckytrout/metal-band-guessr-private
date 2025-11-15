@@ -9,22 +9,14 @@ st.set_page_config(page_title="Map — Folium demo", layout="wide")
 st.title("Map — Folium demo")
 
 st.markdown(
-    """
-    This page demonstrates embedding a Folium (Leaflet) map inside Streamlit.
+        """
+        This page demonstrates embedding a Folium (Leaflet) map inside Streamlit.
 
-    - Click anywhere on the map to get the latitude/longitude (popup).
-    - This is a minimal landing map; later we'll add markers, country click handling,
-      and tie clicks back to the band dataset for the guessing game.
-    """
+        - Click anywhere on the map to get the latitude/longitude (popup).
+        - This is a minimal landing map; later we'll add markers, country click handling,
+            and tie clicks back to the band dataset for the guessing game.
+        """
 )
-
-with st.expander("Dataset info"):
-    try:
-        df = load_metal_bands()
-        st.write("Rows:", df.shape[0], "Columns:", df.shape[1])
-        st.dataframe(df.head(5))
-    except Exception as e:
-        st.warning(f"Could not load dataset preview: {e}")
 
 
 def make_map(show_debug_marker: bool = False):
