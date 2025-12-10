@@ -157,39 +157,16 @@ with col1:
     debug = st.checkbox("Show debug center marker")
 
 with col2:
-    # default map
-    center = (20, 0)
-    zoom = 2
-    # Don't reveal the true location until after user guesses
-    # Always start with world view, not centered on band
-    if st.session_state.get('selected') and st.session_state.get('last_guess'):
-        # Only show band location after user has guessed
-        center = st.session_state['selected']['coords']
-        zoom = 4
-
-    m = make_map(center=center, zoom=zoom, debug_marker=debug)
-
-    # If streamlit_folium is not available, fall back to static embed and warn
-    if st_folium is None:
-        st.warning("Install 'streamlit-folium' to enable click-to-guess behavior (pip install streamlit-folium). Showing non-interactive map.")
-        # optionally show the true marker only in debug mode
-        if st.session_state.get('selected') and debug:
-            lat, lon = st.session_state['selected']['coords']
-            popup_html = f"<b>{st.session_state['selected']['band']}</b>"
-            folium.Marker(location=[lat, lon], popup=folium.Popup(popup_html, max_width=300),
-                          icon=folium.Icon(color='blue', icon='music')).add_to(m)
-        m_html = m._repr_html_()
-        html(m_html, height=650)
-    else:
-        # render interactive map and capture clicks
-        result = st_folium(m, height=650, returned_objects=["last_clicked"]) or {}
-        last = result.get("last_clicked")
-
-        # If user clicked and a band is selected, compute distance and show feedback
-        if last and st.session_state.get('selected'):
-            guess = (last.get('lat'), last.get('lng'))
-            st.session_state['last_guess'] = guess
-
+    # Create a container for the map that we can update
+    map_container = st.container()
+    
+    with map_container:
+        # If user has made a guess, show feedback map; otherwise show guessing map
+        if st.session_state.get('last_guess') and st.session_state.get('selected'):
+            # Show feedback map with guess and actual location
+            guess = st.session_state['last_guess']
+            target = st.session_state['selected']['coords']
+            
             def haversine(a, b):
                 # a, b: (lat, lon) in degrees
                 lat1, lon1 = map(math.radians, a)
@@ -199,16 +176,54 @@ with col2:
                 R = 6371.0
                 h = math.sin(dlat / 2) ** 2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlon / 2) ** 2
                 return 2 * R * math.asin(math.sqrt(h))
-
-            target = st.session_state['selected']['coords']
+            
             dist_km = haversine(guess, target)
             st.success(f"You guessed at {guess[0]:.4f}, {guess[1]:.4f}. Distance to target: {dist_km:.1f} km")
-
-            # rebuild map to show guess and actual (feedback)
-            m2 = make_map(center=target, zoom=4, debug_marker=False)
+            
+            # Build feedback map with both locations
+            m = make_map(center=target, zoom=4, debug_marker=False)
             folium.Marker(location=list(target), popup=folium.Popup("Actual location", max_width=200),
-                          icon=folium.Icon(color='blue', icon='music')).add_to(m2)
+                          icon=folium.Icon(color='blue', icon='music')).add_to(m)
             folium.Marker(location=list(guess), popup=folium.Popup("Your guess", max_width=200),
-                          icon=folium.Icon(color='red', icon='info-sign')).add_to(m2)
-            folium.PolyLine(locations=[list(guess), list(target)], color='purple', weight=2.5, opacity=0.8).add_to(m2)
-            st_folium(m2, height=650, returned_objects=["last_clicked"])
+                          icon=folium.Icon(color='red', icon='info-sign')).add_to(m)
+            folium.PolyLine(locations=[list(guess), list(target)], color='purple', weight=2.5, opacity=0.8).add_to(m)
+            
+            if st_folium is None:
+                m_html = m._repr_html_()
+                html(m_html, height=650)
+            else:
+                st_folium(m, height=650, returned_objects=["last_clicked"])
+        else:
+            # Show guessing map
+            center = (20, 0)
+            zoom = 2
+            # Don't reveal the true location until after user guesses
+            # Always start with world view, not centered on band
+            if st.session_state.get('selected') and st.session_state.get('last_guess'):
+                # Only show band location after user has guessed
+                center = st.session_state['selected']['coords']
+                zoom = 4
+
+            m = make_map(center=center, zoom=zoom, debug_marker=debug)
+
+            # If streamlit_folium is not available, fall back to static embed and warn
+            if st_folium is None:
+                st.warning("Install 'streamlit-folium' to enable click-to-guess behavior (pip install streamlit-folium). Showing non-interactive map.")
+                # optionally show the true marker only in debug mode
+                if st.session_state.get('selected') and debug:
+                    lat, lon = st.session_state['selected']['coords']
+                    popup_html = f"<b>{st.session_state['selected']['band']}</b>"
+                    folium.Marker(location=[lat, lon], popup=folium.Popup(popup_html, max_width=300),
+                                  icon=folium.Icon(color='blue', icon='music')).add_to(m)
+                m_html = m._repr_html_()
+                html(m_html, height=650)
+            else:
+                # render interactive map and capture clicks
+                result = st_folium(m, height=650, returned_objects=["last_clicked"]) or {}
+                last = result.get("last_clicked")
+
+                # If user clicked and a band is selected, compute distance and show feedback
+                if last and st.session_state.get('selected'):
+                    guess = (last.get('lat'), last.get('lng'))
+                    st.session_state['last_guess'] = guess
+                    st.rerun()  # Rerun to update the map in the same container
