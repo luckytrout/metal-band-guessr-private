@@ -5,7 +5,7 @@ import pandas as pd
 import random
 import math
 
-from data_loader import load_metal_bands
+from data_loader import load_metal_bands, load_discography
 from geo import resolve_origin
 
 try:
@@ -17,14 +17,18 @@ except Exception:
 st.set_page_config(page_title="Guesser — Demo", layout="wide")
 st.title("Guesser — Demo")
 
+# Initialize session state
+if 'selected' not in st.session_state:
+    st.session_state.selected = None
+if 'last_guess' not in st.session_state:
+    st.session_state.last_guess = None
+
 st.markdown(
     """
-    This is a minimal demo page for the guessing-game feature.
-
     - Click "Pick random band" to choose a band from the dataset with a resolvable origin.
     - The map will center on the resolved country coordinates and place a marker.
-    - This page is intentionally small: later we'll hide the true location and let the
-      player guess by clicking on the map.
+    - (later hide the true location and let the
+      player guess by clicking on the map.)
     """
 )
 
@@ -55,9 +59,6 @@ def make_map(center=(20, 0), zoom=2, debug_marker=False):
 col1, col2 = st.columns([1, 2])
 
 with col1:
-    st.subheader("Demo controls")
-    if 'selected' not in st.session_state:
-        st.session_state.selected = None
 
     if st.button("Pick random band"):
         try:
@@ -72,6 +73,7 @@ with col1:
                 key, coords = resolve_origin(origin)
                 if key and coords:
                     band = _first_nonempty(row, "band_name", "band", "Band Name", "Name", "name") or "<unknown>"
+                    band_id = _first_nonempty(row, "band_id", "Band ID", "ID", "id")
                     # extra metadata: genre, url, photo, status
                     genre = _first_nonempty(row, "Genre", "genre")
                     url = _first_nonempty(row, "URL", "url", "Link", "link")
@@ -79,6 +81,7 @@ with col1:
                     status = _first_nonempty(row, "Status", "status")
                     picked = {
                         "band": band,
+                        "band_id": band_id,
                         "origin": origin,
                         "country_key": key,
                         "coords": coords,
@@ -122,13 +125,49 @@ with col1:
                 # image fetch/display may fail; fallback to printing URL
                 st.write("Photo URL:", sel.get('photo'))
 
+        # Show discography if band_id is available
+        if sel.get('band_id'):
+            try:
+                disco_df = load_discography()
+                band_disco = disco_df[disco_df['Band ID'] == sel['band_id']]
+                
+                if not band_disco.empty:
+                    st.text(f"Discography ({len(band_disco)} releases)")
+                    
+                    # Show summary stats
+                    years = band_disco['Year'].dropna()
+                    reviewed = band_disco[band_disco['Reviews'] != 'No Reviews'].shape[0]
+                    
+                    col_a, col_b = st.columns(2)
+                    with col_a:
+                        if len(years) > 0:
+                            st.caption("Year Range")
+                            st.text(f"{int(years.min())}–{int(years.max())}")
+                    with col_b:
+                        st.caption("Reviewed")
+                        st.text(f"{reviewed}/{len(band_disco)}")
+                    
+                    # Show detailed table
+                    st.dataframe(
+                        band_disco.sort_values('Year', ascending=False, na_position='last'),
+                        use_container_width=True,
+                        hide_index=True,
+                    )
+                else:
+                    st.info("No discography information found for this band.")
+            except Exception as e:
+                st.warning(f"Could not load discography: {e}")
+
     debug = st.checkbox("Show debug center marker")
 
 with col2:
     # default map
     center = (20, 0)
     zoom = 2
-    if st.session_state.get('selected'):
+    # Don't reveal the true location until after user guesses
+    # Always start with world view, not centered on band
+    if st.session_state.get('selected') and st.session_state.get('last_guess'):
+        # Only show band location after user has guessed
         center = st.session_state['selected']['coords']
         zoom = 4
 

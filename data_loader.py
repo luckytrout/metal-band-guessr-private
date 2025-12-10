@@ -3,6 +3,7 @@ import pandas as pd
 from pathlib import Path
 
 DATA_PATH = Path(__file__).parent / "datasets" / "metal_bands.csv"
+DISCOGRAPHY_PATH = Path(__file__).parent / "datasets" / "all_bands_discography.csv"
 
 def load_metal_bands() -> pd.DataFrame:
     """
@@ -17,6 +18,23 @@ def load_metal_bands() -> pd.DataFrame:
     except UnicodeDecodeError:
         # Some CSVs (especially with special characters) may be latin-1 encoded
         df = pd.read_csv(DATA_PATH, encoding="latin-1")
+
+    return df
+
+
+def load_discography() -> pd.DataFrame:
+    """
+    Load the datasets/all_bands_discography.csv dataset into a pandas DataFrame.
+    
+    Returns a DataFrame with columns: Album Name, Type, Year, Reviews, Band ID
+    """
+    if not DISCOGRAPHY_PATH.exists():
+        raise FileNotFoundError(f"Could not find dataset at: {DISCOGRAPHY_PATH} (expected file: datasets/all_bands_discography.csv)")
+
+    try:
+        df = pd.read_csv(DISCOGRAPHY_PATH, low_memory=False)
+    except UnicodeDecodeError:
+        df = pd.read_csv(DISCOGRAPHY_PATH, encoding="latin-1", low_memory=False)
 
     return df
 
