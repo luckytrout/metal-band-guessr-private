@@ -4,7 +4,13 @@ This repo contains a small dataset and a minimal Streamlit app to preview it.
 
 Quick steps to run locally (Windows PowerShell):
 
-1. Create or activate your virtual environment.
+1. Create and activate a virtual environment (PowerShell):
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+```
+
 2. Install dependencies:
 
 ```powershell
