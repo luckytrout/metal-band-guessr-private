@@ -27,8 +27,7 @@ st.markdown(
     """
     - Click "Pick random band" to choose a band from the dataset with a resolvable origin.
     - The map will center on the resolved country coordinates and place a marker.
-    - (later hide the true location and let the
-      player guess by clicking on the map.)
+    - (later hide the true location and let the player guess by clicking on the map, capture user clicks to grade guesses, add scoring, and a UI to cycle through rounds.)
     """
 )
 
@@ -103,19 +102,12 @@ with col1:
 
     if st.session_state.selected:
         sel = st.session_state.selected
-        st.markdown(f"**Band:** {sel['band']}")
+        st.header(f"{sel['band']}")
         # origin/resolved key hidden during guessing rounds
         if sel.get('genre'):
             st.write("**Genre:**", sel.get('genre'))
         if sel.get('status'):
             st.write("**Status:**", sel.get('status'))
-
-        # show link if available
-        if sel.get('url'):
-            try:
-                st.markdown(f"[Band page]({sel.get('url')})")
-            except Exception:
-                st.write("URL:", sel.get('url'))
 
         # show photo if available
         if sel.get('photo'):
@@ -132,20 +124,17 @@ with col1:
                 band_disco = disco_df[disco_df['Band ID'] == sel['band_id']]
                 
                 if not band_disco.empty:
-                    st.text(f"Discography ({len(band_disco)} releases)")
+                    st.markdown(f"**Discography:** {len(band_disco)} releases")
                     
                     # Show summary stats
                     years = band_disco['Year'].dropna()
                     reviewed = band_disco[band_disco['Reviews'] != 'No Reviews'].shape[0]
                     
-                    col_a, col_b = st.columns(2)
-                    with col_a:
-                        if len(years) > 0:
-                            st.caption("Year Range")
-                            st.text(f"{int(years.min())}–{int(years.max())}")
-                    with col_b:
-                        st.caption("Reviewed")
-                        st.text(f"{reviewed}/{len(band_disco)}")
+                    if len(years) > 0:
+                            st.markdown(f"**Year Range:** {int(years.min())}–{int(years.max())}")
+
+                    st.markdown(f"**Number of Releases Reviewed:** {reviewed}/{len(band_disco)}")
+                        
                     
                     # Show detailed table
                     st.dataframe(
@@ -157,6 +146,13 @@ with col1:
                     st.info("No discography information found for this band.")
             except Exception as e:
                 st.warning(f"Could not load discography: {e}")
+
+        # show link if available
+            if sel.get('url'):
+                try:
+                    st.markdown(f"[Band page]({sel.get('url')})")
+                except Exception:
+                    st.write("URL:", sel.get('url'))
 
     debug = st.checkbox("Show debug center marker")
 
@@ -216,9 +212,3 @@ with col2:
                           icon=folium.Icon(color='red', icon='info-sign')).add_to(m2)
             folium.PolyLine(locations=[list(guess), list(target)], color='purple', weight=2.5, opacity=0.8).add_to(m2)
             st_folium(m2, height=650, returned_objects=["last_clicked"])
-
-
-st.markdown("""
-Next steps: hide the true location and capture user clicks to grade guesses, add scoring, and a UI
-to cycle through rounds.
-""")
